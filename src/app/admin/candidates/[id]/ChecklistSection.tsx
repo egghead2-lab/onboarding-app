@@ -35,6 +35,7 @@ type Doc = {
   requirement_id: string | null
   signedUrl: string | null
   file_name: string
+  storage_path: string
 }
 
 function isOverdue(dueDate: string | null) {

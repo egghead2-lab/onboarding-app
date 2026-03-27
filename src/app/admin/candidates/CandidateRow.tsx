@@ -12,6 +12,21 @@ const statusColors: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800',
 }
 
+const REQ_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+  not_started:        { label: 'Not Started',        cls: 'bg-gray-100 text-gray-600' },
+  instructions_sent:  { label: 'Instructions Sent',  cls: 'bg-blue-100 text-blue-700' },
+  awaiting_candidate: { label: 'Awaiting Candidate', cls: 'bg-amber-100 text-amber-700' },
+  action_needed:      { label: 'Action Needed',      cls: 'bg-red-100 text-red-700' },
+}
+
+type OverdueReq = {
+  id: string
+  due_date: string
+  status: string | null
+  requirement: { title: string; type: string } | null
+  assignee: { full_name: string | null } | null
+}
+
 type TeamMember = { id: string; full_name: string | null; email: string }
 type SheetData = {
   rows: { area: string; trainer: string; fieldManager: string; scheduler: string }[]
@@ -26,12 +41,14 @@ export default function CandidateRow({
   areas,
   unreadCount,
   approaching,
+  overdueRequirements = [],
 }: {
   candidate: any
   teamMembers: TeamMember[]
   areas: string[]
   unreadCount: number
   approaching?: boolean
+  overdueRequirements?: OverdueReq[]
 }) {
   const router = useRouter()
   const [status, setStatus] = useState(candidate.status)
@@ -72,6 +89,7 @@ export default function CandidateRow({
   const select = 'text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full'
 
   return (
+  <>
     <tr className="hover:bg-blue-50 border-b border-gray-100">
       {/* Name */}
       <td className={cell}>
@@ -172,5 +190,42 @@ export default function CandidateRow({
         <Link href={href} className="text-blue-600 text-xs hover:underline">View →</Link>
       </td>
     </tr>
+
+    {overdueRequirements.map(req => {
+      const reqStatus = req.status ?? 'not_started'
+      const statusInfo = REQ_STATUS_LABELS[reqStatus] ?? REQ_STATUS_LABELS.not_started
+      const dueLabel = new Date(req.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      return (
+        <tr key={req.id} className="bg-red-50 border-b border-red-100">
+          {/* Name col — indented requirement title */}
+          <td className="px-3 py-1.5 pl-8">
+            <Link href={href} className="flex items-center gap-2">
+              <span className="text-xs text-red-400">⚠</span>
+              <span className="text-xs text-gray-700 font-medium truncate max-w-xs">{req.requirement?.title}</span>
+            </Link>
+          </td>
+          {/* Area col — requirement type badge */}
+          <td className="px-3 py-1.5">
+            {req.requirement?.type && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 capitalize">{req.requirement.type}</span>
+            )}
+          </td>
+          {/* Status col — req status */}
+          <td className="px-3 py-1.5">
+            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${statusInfo.cls}`}>{statusInfo.label}</span>
+          </td>
+          {/* Assigned To col */}
+          <td className="px-3 py-1.5">
+            <span className="text-xs text-gray-500">{req.assignee?.full_name ?? '—'}</span>
+          </td>
+          {/* Due date col */}
+          <td className="px-3 py-1.5">
+            <span className="text-xs font-medium text-red-600">Due {dueLabel}</span>
+          </td>
+          <td />
+        </tr>
+      )
+    })}
+  </>
   )
 }

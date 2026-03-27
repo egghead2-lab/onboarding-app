@@ -29,9 +29,20 @@ export default async function CandidatesPage({
   const supabase = await createClient()
   const { search = '', showCompleted } = await searchParams
 
+  const today = new Date().toISOString().split('T')[0]
+
   let query = supabase
     .from('candidates')
-    .select('*, candidate_details(availability_changed), messages(id, is_read, sender_id)')
+    .select(`
+      *,
+      candidate_details(availability_changed),
+      messages(id, is_read, sender_id),
+      candidate_requirements(
+        id, due_date, status, completed,
+        requirement:requirement_id(title, type),
+        assignee:assigned_to(full_name)
+      )
+    `)
 
   if (search) {
     query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`)
@@ -60,10 +71,16 @@ export default async function CandidatesPage({
     return c.messages?.filter((m: any) => !m.is_read && m.sender_id === c.profile_id).length ?? 0
   }
 
+  function overdueReqs(c: any) {
+    return (c.candidate_requirements ?? []).filter(
+      (r: any) => !r.completed && r.due_date && r.due_date < today
+    ).sort((a: any, b: any) => a.due_date.localeCompare(b.due_date))
+  }
+
   function rowProps(c: any) {
     const days = c.first_class_date ? daysUntil(c.first_class_date) : null
     const approaching = days !== null && days >= 0 && days <= 7
-    return { candidate: c, teamMembers: teamMembers ?? [], areas, unreadCount: unreadCount(c), approaching }
+    return { candidate: c, teamMembers: teamMembers ?? [], areas, unreadCount: unreadCount(c), approaching, overdueRequirements: overdueReqs(c) }
   }
 
   return (

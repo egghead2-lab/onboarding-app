@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import EmailThread from '@/components/EmailThread'
 import AcknowledgeButton from './profile/AcknowledgeButton'
