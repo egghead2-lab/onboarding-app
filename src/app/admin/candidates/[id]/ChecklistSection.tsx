@@ -42,6 +42,15 @@ function isOverdue(dueDate: string | null) {
   return new Date(dueDate) < new Date(new Date().toDateString())
 }
 
+function sortByUrgency(items: ChecklistItem[]) {
+  return [...items].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+  })
+}
+
 export default function ChecklistSection({
   initialItems,
   docs,
@@ -53,13 +62,13 @@ export default function ChecklistSection({
   candidateId: string
   currentUserId: string
 }) {
-  const [items, setItems] = useState(initialItems)
+  const [items, setItems] = useState(() => sortByUrgency(initialItems))
   const [showCompleted, setShowCompleted] = useState(false)
   const supabase = createClient()
 
   async function toggle(item: ChecklistItem) {
     const newCompleted = !item.completed
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, completed: newCompleted } : i))
+    setItems(prev => sortByUrgency(prev.map(i => i.id === item.id ? { ...i, completed: newCompleted } : i)))
     await supabase.from('candidate_requirements').update({
       completed: newCompleted,
       completed_at: newCompleted ? new Date().toISOString() : null,
@@ -70,6 +79,11 @@ export default function ChecklistSection({
   async function updateStatus(item: ChecklistItem, status: string) {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, status } : i))
     await supabase.from('candidate_requirements').update({ status }).eq('id', item.id)
+  }
+
+  async function updateDueDate(item: ChecklistItem, due_date: string | null) {
+    setItems(prev => sortByUrgency(prev.map(i => i.id === item.id ? { ...i, due_date } : i)))
+    await supabase.from('candidate_requirements').update({ due_date }).eq('id', item.id)
   }
 
   const outstanding = items.filter(i => !i.completed)
@@ -101,13 +115,9 @@ export default function ChecklistSection({
       <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
         {visible.map(item => {
           const overdue = isOverdue(item.due_date) && !item.completed
-          const dueLabel = item.due_date
-            ? new Date(item.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-            : null
-
           const currentStatus = item.status ?? 'not_started'
           return (
-            <div key={item.id} className="grid items-center gap-3 px-4 py-1.5" style={{ gridTemplateColumns: '1rem 1fr 10rem 7rem 5rem' }}>
+            <div key={item.id} className="grid items-center gap-3 px-4 py-1.5" style={{ gridTemplateColumns: '1rem 1fr 10rem 7rem 6.5rem' }}>
               <button
                 onClick={() => toggle(item)}
                 className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${item.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
@@ -134,9 +144,15 @@ export default function ChecklistSection({
                 ))}
               </select>
               <span className="text-xs text-gray-400 truncate">{item.assignee?.full_name ?? ''}</span>
-              <span className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
-                {overdue ? '⚠ ' : ''}{dueLabel ?? ''}
-              </span>
+              <div className="flex items-center gap-1">
+                {overdue && <span className="text-red-500 text-xs">⚠</span>}
+                <input
+                  type="date"
+                  value={item.due_date ?? ''}
+                  onChange={e => updateDueDate(item, e.target.value || null)}
+                  className={`text-xs font-medium bg-transparent border-0 p-0 w-full cursor-pointer focus:outline-none ${overdue ? 'text-red-600' : 'text-gray-400'}`}
+                />
+              </div>
             </div>
           )
         })}

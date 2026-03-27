@@ -16,6 +16,15 @@ function isOverdue(dueDate: string | null) {
   return new Date(dueDate) < new Date(new Date().toDateString())
 }
 
+function sortByUrgency(tasks: Task[]) {
+  return [...tasks].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+  })
+}
+
 export default function TasksSection({
   initialTasks,
   candidateId,
@@ -25,7 +34,7 @@ export default function TasksSection({
   candidateId: string
   currentUserId: string
 }) {
-  const [tasks, setTasks] = useState(initialTasks)
+  const [tasks, setTasks] = useState(() => sortByUrgency(initialTasks))
   const [showCompleted, setShowCompleted] = useState(false)
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -34,11 +43,16 @@ export default function TasksSection({
 
   async function toggle(task: Task) {
     const newCompleted = !task.completed
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: newCompleted } : t))
+    setTasks(prev => sortByUrgency(prev.map(t => t.id === task.id ? { ...t, completed: newCompleted } : t)))
     await supabase.from('tasks').update({
       completed: newCompleted,
       completed_at: newCompleted ? new Date().toISOString() : null,
     }).eq('id', task.id)
+  }
+
+  async function updateDueDate(task: Task, due_date: string | null) {
+    setTasks(prev => sortByUrgency(prev.map(t => t.id === task.id ? { ...t, due_date } : t)))
+    await supabase.from('tasks').update({ due_date }).eq('id', task.id)
   }
 
   async function addTask(e: React.FormEvent) {
@@ -53,7 +67,7 @@ export default function TasksSection({
     }).select('*, assignee:assigned_to(full_name)').single()
 
     if (data) {
-      setTasks(prev => [data, ...prev])
+      setTasks(prev => sortByUrgency([data, ...prev]))
       setTitle('')
       setDueDate('')
     }
@@ -102,12 +116,8 @@ export default function TasksSection({
         <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
           {visible.map(task => {
             const overdue = isOverdue(task.due_date) && !task.completed
-            const dueLabel = task.due_date
-              ? new Date(task.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-              : null
-
             return (
-              <div key={task.id} className="grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: '1rem 1fr 8rem 5rem' }}>
+              <div key={task.id} className="grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: '1rem 1fr 7rem 6.5rem' }}>
                 <button
                   onClick={() => toggle(task)}
                   className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${task.completed ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
@@ -120,9 +130,15 @@ export default function TasksSection({
                 </button>
                 <p className={`text-sm truncate ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</p>
                 <span className="text-xs text-gray-400 truncate">{task.assignee?.full_name ?? ''}</span>
-                <span className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
-                  {overdue ? '⚠ ' : ''}{dueLabel ?? ''}
-                </span>
+                <div className="flex items-center gap-1">
+                  {overdue && <span className="text-red-500 text-xs">⚠</span>}
+                  <input
+                    type="date"
+                    value={task.due_date ?? ''}
+                    onChange={e => updateDueDate(task, e.target.value || null)}
+                    className={`text-xs font-medium bg-transparent border-0 p-0 w-full cursor-pointer focus:outline-none ${overdue ? 'text-red-600' : 'text-gray-400'}`}
+                  />
+                </div>
               </div>
             )
           })}
