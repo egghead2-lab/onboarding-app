@@ -26,28 +26,32 @@ export default function EmailThread({
 }) {
   const [messages, setMessages] = useState<EmailMessage[]>([])
   const [connectedEmail, setConnectedEmail] = useState<string>('')
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [composing, setComposing] = useState(false)
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function loadMessages() {
-    setLoading(true)
+  function loadMessages(isRefresh = false) {
+    if (isRefresh) setRefreshing(true)
     fetch(`/api/gmail/threads?candidateId=${candidateId}`)
       .then(r => r.json())
       .then(data => {
         setMessages(data.messages ?? [])
         setConnectedEmail(data.connectedEmail ?? '')
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setInitialLoading(false)
+        setRefreshing(false)
+      })
   }
 
   useEffect(() => {
-    if (!gmailConnected) { setLoading(false); return }
+    if (!gmailConnected) { setInitialLoading(false); return }
     loadMessages()
-  }, [candidateId, gmailConnected])
+  }, [candidateId])
 
   const existingThreadId = messages[messages.length - 1]?.threadId ?? null
   const existingSubject = messages[messages.length - 1]?.subject ?? ''
@@ -100,16 +104,17 @@ export default function EmailThread({
       {/* Thread messages */}
       <div className="flex items-center justify-end mb-3">
         <button
-          onClick={loadMessages}
-          disabled={loading}
+          onClick={() => loadMessages(true)}
+          disabled={refreshing}
           className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40"
         >
-          {loading ? 'Refreshing...' : '↻ Refresh'}
+          {refreshing ? 'Refreshing...' : '↻ Refresh'}
         </button>
       </div>
-      {!loading && messages.length === 0 && <p className="text-sm text-gray-400 mb-3">No emails yet.</p>}
+      {initialLoading && <p className="text-sm text-gray-400 mb-3">Loading emails...</p>}
+      {!initialLoading && messages.length === 0 && <p className="text-sm text-gray-400 mb-3">No emails yet.</p>}
 
-      {!loading && messages.length > 0 && (
+      {messages.length > 0 && (
         <div className="space-y-3 mb-4">
           {messages.map(msg => {
             const isOutbound = connectedEmail
