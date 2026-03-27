@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import SendEmailPanel from '@/components/SendEmailPanel'
+import EmailThread from '@/components/EmailThread'
 import DocumentList from '@/components/DocumentList'
 import AcknowledgeButton from './profile/AcknowledgeButton'
 import MessageThread from '@/components/MessageThread'
@@ -81,7 +81,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: emailThreads }, { data: documents }, { data: details }, { data: messages }] = await Promise.all([
+  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }] = await Promise.all([
     supabase.from('candidate_requirements')
       .select('*, requirement:requirement_id(*)')
       .eq('candidate_id', id)
@@ -91,7 +91,6 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
       .eq('candidate_id', id)
       .order('created_at', { ascending: false }),
     supabase.from('gmail_tokens').select('email').eq('user_id', user!.id).single(),
-    supabase.from('email_threads').select('*').eq('candidate_id', id).order('last_message_at', { ascending: false }),
     supabase.from('documents').select('*').eq('candidate_id', id),
     supabase.from('candidate_details').select('availability_changed').eq('candidate_id', id).single(),
     supabase.from('messages').select('*, sender:profiles(full_name)').eq('candidate_id', id).order('created_at'),
@@ -231,24 +230,13 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
       </section>
 
       {/* Email */}
-      <section>
+      <section className="mt-8">
         <h2 className="text-base font-semibold text-gray-900 mb-3">Email</h2>
-        {emailThreads?.length ? (
-          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 mb-3">
-            {emailThreads.map((thread: any) => (
-              <div key={thread.id} className="px-4 py-3">
-                <p className="text-sm font-medium text-gray-900">{thread.subject}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{new Date(thread.last_message_at).toLocaleString()}</p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <SendEmailPanel
+        <EmailThread
           candidateId={candidate.id}
           candidateEmail={candidate.email}
           candidateName={candidate.full_name}
           gmailConnected={!!gmailToken}
-          existingThreadId={emailThreads?.[0]?.gmail_thread_id}
         />
       </section>
     </div>

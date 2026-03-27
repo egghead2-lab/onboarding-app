@@ -21,6 +21,50 @@ export function getAuthUrl() {
   })
 }
 
+export async function fetchThreadMessages(
+  threadId: string,
+  accessToken: string,
+  refreshToken: string | null
+) {
+  const client = getOAuthClient()
+  client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
+  const gmail = google.gmail({ version: 'v1', auth: client })
+
+  const thread = await gmail.users.threads.get({
+    userId: 'me',
+    id: threadId,
+    format: 'full',
+  })
+
+  return (thread.data.messages ?? []).map(msg => {
+    const headers = msg.payload?.headers ?? []
+    const get = (name: string) =>
+      headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+
+    let body = ''
+    const parts = msg.payload?.parts
+    if (parts) {
+      const textPart = parts.find(p => p.mimeType === 'text/plain')
+      if (textPart?.body?.data) {
+        body = Buffer.from(textPart.body.data, 'base64').toString('utf-8')
+      }
+    } else if (msg.payload?.body?.data) {
+      body = Buffer.from(msg.payload.body.data, 'base64').toString('utf-8')
+    }
+
+    return {
+      id: msg.id ?? '',
+      threadId: msg.threadId ?? '',
+      from: get('From'),
+      to: get('To'),
+      subject: get('Subject'),
+      date: get('Date'),
+      body,
+      internalDate: msg.internalDate ?? '0',
+    }
+  })
+}
+
 export async function sendEmail({
   accessToken,
   refreshToken,
