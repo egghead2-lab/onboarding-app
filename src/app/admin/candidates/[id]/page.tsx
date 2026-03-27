@@ -97,7 +97,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }, { data: trainerProfile }] = await Promise.all([
+  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }] = await Promise.all([
     supabase.from('candidate_requirements')
       .select('*, requirement:requirement_id(*)')
       .eq('candidate_id', id)
@@ -112,9 +112,6 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
     supabase.from('messages').select('*, sender:profiles(full_name)').eq('candidate_id', id).order('created_at'),
     candidate.onboarder_id
       ? supabase.from('profiles').select('full_name').eq('id', candidate.onboarder_id).single()
-      : Promise.resolve({ data: null }),
-    candidate.trainer_id
-      ? supabase.from('profiles').select('full_name').eq('id', candidate.trainer_id).single()
       : Promise.resolve({ data: null }),
   ])
 
@@ -170,7 +167,6 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         <InfoPill label="Field Manager" value={candidate.field_manager} />
         <InfoPill label="Trainer" value={candidate.trainer} />
         <InfoPill label="Onboarder" value={onboarderProfile?.full_name ?? null} />
-        <InfoPill label="Internal Trainer" value={trainerProfile?.full_name ?? null} />
       </div>
 
       {/* Availability changed banner */}

@@ -51,6 +51,11 @@ export default function AdminProfileForm({
     fetch('/api/sheets').then((r) => r.json()).then(setSheetData)
   }, [])
 
+  function matchTrainerToProfile(trainerName: string) {
+    const match = teamMembers.find(m => m.full_name === trainerName)
+    setTrainerId(match?.id ?? '')
+  }
+
   function handleAreaChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const selected = e.target.value
     setArea(selected)
@@ -60,7 +65,13 @@ export default function AdminProfileForm({
       setTrainer(match.trainer)
       setFieldManager(match.fieldManager)
       setScheduler(match.scheduler)
+      matchTrainerToProfile(match.trainer)
     }
+  }
+
+  function handleTrainerChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    setTrainer(e.target.value)
+    matchTrainerToProfile(e.target.value)
   }
 
   function toggleTrainingType(type: string) {
@@ -265,10 +276,17 @@ export default function AdminProfileForm({
         <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Trainer</label>
-            <select value={trainer} onChange={(e) => setTrainer(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select value={trainer} onChange={handleTrainerChange} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">Select...</option>
               {sheetData?.trainers.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
+            {trainer && (
+              <p className="text-xs mt-1 text-gray-400">
+                {trainerId
+                  ? `Matched to: ${teamMembers.find(m => m.id === trainerId)?.full_name}`
+                  : 'No internal account match — task assignment will be unset'}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Field Manager</label>
@@ -296,23 +314,13 @@ export default function AdminProfileForm({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Onboarder</label>
-            <select value={onboarderId} onChange={(e) => setOnboarderId(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Select...</option>
-              {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Trainer (Internal)</label>
-            <select value={trainerId} onChange={(e) => setTrainerId(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Select...</option>
-              {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Onboarder</label>
+          <select value={onboarderId} onChange={(e) => setOnboarderId(e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Select...</option>
+            {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
+          </select>
         </div>
 
         <div>
