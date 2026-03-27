@@ -56,11 +56,11 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }] = await Promise.all([
     supabase.from('candidate_requirements')
-      .select('*, requirement:requirement_id(*)')
+      .select('*, requirement:requirement_id(*), assignee:assigned_to(full_name)')
       .eq('candidate_id', id)
       .order('requirement(sort_order)'),
     supabase.from('tasks')
-      .select('*')
+      .select('*, assignee:assigned_to(full_name)')
       .eq('candidate_id', id)
       .order('created_at', { ascending: false }),
     supabase.from('gmail_tokens').select('email').eq('user_id', user!.id).single(),
