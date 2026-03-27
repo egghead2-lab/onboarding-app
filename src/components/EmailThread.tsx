@@ -33,8 +33,8 @@ export default function EmailThread({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!gmailConnected) { setLoading(false); return }
+  function loadMessages() {
+    setLoading(true)
     fetch(`/api/gmail/threads?candidateId=${candidateId}`)
       .then(r => r.json())
       .then(data => {
@@ -42,6 +42,11 @@ export default function EmailThread({
         setConnectedEmail(data.connectedEmail ?? '')
       })
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    if (!gmailConnected) { setLoading(false); return }
+    loadMessages()
   }, [candidateId, gmailConnected])
 
   const existingThreadId = messages[messages.length - 1]?.threadId ?? null
@@ -93,11 +98,18 @@ export default function EmailThread({
   return (
     <div>
       {/* Thread messages */}
-      {loading ? (
-        <p className="text-sm text-gray-400 mb-3">Loading emails...</p>
-      ) : messages.length === 0 ? (
-        <p className="text-sm text-gray-400 mb-3">No emails yet.</p>
-      ) : (
+      <div className="flex items-center justify-end mb-3">
+        <button
+          onClick={loadMessages}
+          disabled={loading}
+          className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40"
+        >
+          {loading ? 'Refreshing...' : '↻ Refresh'}
+        </button>
+      </div>
+      {!loading && messages.length === 0 && <p className="text-sm text-gray-400 mb-3">No emails yet.</p>}
+
+      {!loading && messages.length > 0 && (
         <div className="space-y-3 mb-4">
           {messages.map(msg => {
             const isOutbound = connectedEmail
