@@ -89,7 +89,7 @@ export default function ChecklistSection({
             : null
 
           return (
-            <div key={item.id} className="flex items-center gap-3 px-4 py-2">
+            <div key={item.id} className="grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: '1rem 1fr 8rem 5rem' }}>
               <button
                 onClick={() => toggle(item)}
                 className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${item.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
@@ -100,22 +100,16 @@ export default function ChecklistSection({
                   </svg>
                 )}
               </button>
-              <p className={`flex-1 text-sm min-w-0 truncate ${item.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+              <p className={`text-sm truncate ${item.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                 {item.requirement?.title}
-              </p>
-              <div className="flex items-center gap-3 flex-shrink-0 ml-2">
-                {item.assignee?.full_name && (
-                  <span className="text-xs text-gray-400 whitespace-nowrap">{item.assignee.full_name}</span>
-                )}
-                {dueLabel && (
-                  <span className={`text-xs whitespace-nowrap font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
-                    {overdue ? '⚠ ' : ''}{dueLabel}
-                  </span>
-                )}
                 {item.requirement?.requires_document && (
                   <DocumentList docs={docs.filter(d => d.requirement_id === item.requirement_id)} />
                 )}
-              </div>
+              </p>
+              <span className="text-xs text-gray-400 truncate">{item.assignee?.full_name ?? ''}</span>
+              <span className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
+                {overdue ? '⚠ ' : ''}{dueLabel ?? ''}
+              </span>
             </div>
           )
         })}

@@ -107,7 +107,7 @@ export default function TasksSection({
               : null
 
             return (
-              <div key={task.id} className="flex items-center gap-3 px-4 py-2">
+              <div key={task.id} className="grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: '1rem 1fr 8rem 5rem' }}>
                 <button
                   onClick={() => toggle(task)}
                   className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${task.completed ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
@@ -118,17 +118,11 @@ export default function TasksSection({
                     </svg>
                   )}
                 </button>
-                <p className={`flex-1 text-sm min-w-0 truncate ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</p>
-                <div className="flex items-center gap-3 flex-shrink-0 ml-2">
-                  {task.assignee?.full_name && (
-                    <span className="text-xs text-gray-400 whitespace-nowrap">{task.assignee.full_name}</span>
-                  )}
-                  {dueLabel && (
-                    <span className={`text-xs whitespace-nowrap font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
-                      {overdue ? '⚠ ' : ''}{dueLabel}
-                    </span>
-                  )}
-                </div>
+                <p className={`text-sm truncate ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</p>
+                <span className="text-xs text-gray-400 truncate">{task.assignee?.full_name ?? ''}</span>
+                <span className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
+                  {overdue ? '⚠ ' : ''}{dueLabel ?? ''}
+                </span>
               </div>
             )
           })}
