@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { fetchThreadMessages } from '@/lib/gmail'
-import { getOAuthClient } from '@/lib/gmail'
+import { fetchThreadMessages, getOAuthClient } from '@/lib/gmail'
 import { google } from 'googleapis'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
     .eq('user_id', user.id)
     .single()
 
-  if (!token) return NextResponse.json({ messages: [] })
+  if (!token) return NextResponse.json({ threads: [] })
 
   const { data: candidate } = await supabase
     .from('candidates')
@@ -26,9 +25,8 @@ export async function GET(request: NextRequest) {
     .eq('id', candidateId)
     .single()
 
-  if (!candidate) return NextResponse.json({ messages: [] })
+  if (!candidate) return NextResponse.json({ threads: [] })
 
-  // Format date as YYYY/MM/DD for Gmail search
   const afterDate = new Date(candidate.created_at)
   const afterStr = `${afterDate.getFullYear()}/${String(afterDate.getMonth() + 1).padStart(2, '0')}/${String(afterDate.getDate()).padStart(2, '0')}`
 
@@ -36,7 +34,6 @@ export async function GET(request: NextRequest) {
   client.setCredentials({ access_token: token.access_token, refresh_token: token.refresh_token })
   const gmail = google.gmail({ version: 'v1', auth: client })
 
-  // Search for all emails to or from the candidate after their invite date
   const searchRes = await gmail.users.messages.list({
     userId: 'me',
     q: `(from:${candidate.email} OR to:${candidate.email}) after:${afterStr}`,
@@ -44,29 +41,37 @@ export async function GET(request: NextRequest) {
   })
 
   const messageRefs = searchRes.data.messages ?? []
-  if (!messageRefs.length) return NextResponse.json({ messages: [], connectedEmail: token.email })
+  if (!messageRefs.length) return NextResponse.json({ threads: [], connectedEmail: token.email })
 
-  // Deduplicate by threadId, then fetch each thread once
   const threadIds = [...new Set(messageRefs.map(m => m.threadId).filter(Boolean) as string[])]
 
-  const allMessages: Awaited<ReturnType<typeof fetchThreadMessages>> = []
+  type EmailMessage = Awaited<ReturnType<typeof fetchThreadMessages>>[number]
+  const threadMap = new Map<string, { threadId: string; subject: string; messages: EmailMessage[] }>()
+
   for (const threadId of threadIds) {
     try {
       const msgs = await fetchThreadMessages(threadId, token.access_token, token.refresh_token)
-      allMessages.push(...msgs)
+      if (!msgs.length) continue
+      // Deduplicate within thread
+      const seen = new Set<string>()
+      const unique = msgs.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true })
+      unique.sort((a, b) => Number(a.internalDate) - Number(b.internalDate))
+      threadMap.set(threadId, {
+        threadId,
+        subject: unique[0].subject,
+        messages: unique,
+      })
     } catch {
       // skip deleted/inaccessible threads
     }
   }
 
-  // Deduplicate messages by id and sort chronologically
-  const seen = new Set<string>()
-  const unique = allMessages.filter(m => {
-    if (seen.has(m.id)) return false
-    seen.add(m.id)
-    return true
+  // Sort threads: most recent last message first
+  const threads = Array.from(threadMap.values()).sort((a, b) => {
+    const aLast = Number(a.messages[a.messages.length - 1].internalDate)
+    const bLast = Number(b.messages[b.messages.length - 1].internalDate)
+    return bLast - aLast
   })
-  unique.sort((a, b) => Number(a.internalDate) - Number(b.internalDate))
 
-  return NextResponse.json({ messages: unique, connectedEmail: token.email })
+  return NextResponse.json({ threads, connectedEmail: token.email })
 }

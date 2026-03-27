@@ -7,7 +7,21 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { to, subject, body, candidateId, threadId } = await request.json()
+  const formData = await request.formData()
+  const to = formData.get('to') as string
+  const subject = formData.get('subject') as string
+  const body = formData.get('body') as string
+  const candidateId = formData.get('candidateId') as string
+  const threadId = formData.get('threadId') as string | null
+
+  const files = formData.getAll('attachments') as File[]
+  const attachments = await Promise.all(
+    files.filter(f => f.size > 0).map(async file => ({
+      name: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      data: Buffer.from(await file.arrayBuffer()),
+    }))
+  )
 
   const { data: token } = await supabase
     .from('gmail_tokens')
@@ -24,9 +38,9 @@ export async function POST(request: NextRequest) {
     subject,
     body,
     threadId,
+    attachments,
   })
 
-  // Save thread record
   if (candidateId) {
     await supabase.from('email_threads').upsert({
       candidate_id: candidateId,

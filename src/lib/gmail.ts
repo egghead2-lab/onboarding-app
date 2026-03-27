@@ -1,4 +1,4 @@
-import { google } from 'googleapis'
+import { google, gmail_v1 } from 'googleapis'
 
 export function getOAuthClient() {
   return new google.auth.OAuth2(
@@ -21,6 +21,24 @@ export function getAuthUrl() {
   })
 }
 
+function extractBody(payload: gmail_v1.Schema$MessagePart | undefined | null): { text: string; html: string } {
+  let text = ''
+  let html = ''
+
+  function walk(part: gmail_v1.Schema$MessagePart) {
+    if (part.mimeType === 'text/plain' && part.body?.data && !text) {
+      text = Buffer.from(part.body.data, 'base64').toString('utf-8')
+    }
+    if (part.mimeType === 'text/html' && part.body?.data && !html) {
+      html = Buffer.from(part.body.data, 'base64').toString('utf-8')
+    }
+    for (const p of part.parts ?? []) walk(p)
+  }
+
+  if (payload) walk(payload)
+  return { text, html }
+}
+
 export async function fetchThreadMessages(
   threadId: string,
   accessToken: string,
@@ -41,16 +59,7 @@ export async function fetchThreadMessages(
     const get = (name: string) =>
       headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
 
-    let body = ''
-    const parts = msg.payload?.parts
-    if (parts) {
-      const textPart = parts.find(p => p.mimeType === 'text/plain')
-      if (textPart?.body?.data) {
-        body = Buffer.from(textPart.body.data, 'base64').toString('utf-8')
-      }
-    } else if (msg.payload?.body?.data) {
-      body = Buffer.from(msg.payload.body.data, 'base64').toString('utf-8')
-    }
+    const { text, html } = extractBody(msg.payload)
 
     return {
       id: msg.id ?? '',
@@ -59,7 +68,8 @@ export async function fetchThreadMessages(
       to: get('To'),
       subject: get('Subject'),
       date: get('Date'),
-      body,
+      text,
+      html,
       internalDate: msg.internalDate ?? '0',
     }
   })
@@ -72,6 +82,7 @@ export async function sendEmail({
   subject,
   body,
   threadId,
+  attachments,
 }: {
   accessToken: string
   refreshToken: string | null
@@ -79,21 +90,50 @@ export async function sendEmail({
   subject: string
   body: string
   threadId?: string | null
+  attachments?: Array<{ name: string; mimeType: string; data: Buffer }>
 }) {
   const client = getOAuthClient()
   client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
-
   const gmail = google.gmail({ version: 'v1', auth: client })
 
-  const message = [
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    'Content-Type: text/plain; charset=utf-8',
-    '',
-    body,
-  ].join('\n')
+  let encoded: string
 
-  const encoded = Buffer.from(message).toString('base64url')
+  if (!attachments?.length) {
+    const message = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      body,
+    ].join('\r\n')
+    encoded = Buffer.from(message).toString('base64url')
+  } else {
+    const boundary = `boundary_${Date.now()}`
+    const parts: string[] = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      body,
+    ]
+    for (const att of attachments) {
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${att.mimeType}; name="${att.name}"`,
+        `Content-Disposition: attachment; filename="${att.name}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        att.data.toString('base64'),
+      )
+    }
+    parts.push(`--${boundary}--`)
+    encoded = Buffer.from(parts.join('\r\n')).toString('base64url')
+  }
 
   const res = await gmail.users.messages.send({
     userId: 'me',
