@@ -58,7 +58,7 @@ export default function UploadButton({
       <input
         ref={inputRef}
         type="file"
-        className="hidden"
+        className="sr-only"
         onChange={handleUpload}
       />
       <button
