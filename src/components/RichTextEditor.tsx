@@ -29,6 +29,7 @@ export default function RichTextEditor({
   placeholder?: string
 }) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [StarterKit],
     editorProps: {
       attributes: {
