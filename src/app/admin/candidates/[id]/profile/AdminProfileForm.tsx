@@ -44,6 +44,8 @@ export default function AdminProfileForm({
   const [trainingTypes, setTrainingTypes] = useState<string[]>(candidate.training_types ?? [])
   const [onboarderId, setOnboarderId] = useState(candidate.onboarder_id ?? '')
   const [trainerId, setTrainerId] = useState(candidate.trainer_id ?? '')
+  const [payRate, setPayRate] = useState(candidate.pay_rate ?? '')
+  const [trainingType, setTrainingType] = useState(candidate.training_type ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -113,6 +115,8 @@ export default function AdminProfileForm({
       training_types: trainingTypes,
       onboarder_id: onboarderId || null,
       trainer_id: trainerId || null,
+      pay_rate: payRate !== '' ? Number(payRate) : null,
+      training_type: trainingType || null,
     }).eq('id', candidate.id)
 
     if (candidateError) {
@@ -321,6 +325,36 @@ export default function AdminProfileForm({
             <option value="">Select...</option>
             {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
           </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Default Pay Rate</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={payRate}
+                onChange={e => setPayRate(e.target.value)}
+                placeholder="0.00"
+                className="w-full border border-gray-300 rounded-md pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Training Type</label>
+            <select
+              value={trainingType}
+              onChange={e => setTrainingType(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select...</option>
+              <option value="In Class Observations">In Class Observations</option>
+              <option value="No In Class Observations">No In Class Observations</option>
+            </select>
+          </div>
         </div>
 
         <div>

@@ -121,6 +121,13 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         <InfoPill label="Field Manager" value={candidate.field_manager} />
         <InfoPill label="Trainer" value={candidate.trainer} />
         <InfoPill label="Onboarder" value={onboarderProfile?.full_name ?? null} />
+        <InfoPill label="Training Type" value={candidate.training_type} />
+        {candidate.pay_rate != null && (
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-400">Pay Rate</span>
+            <span className="text-sm font-medium text-gray-900">${Number(candidate.pay_rate).toFixed(2)}</span>
+          </div>
+        )}
       </div>
 
       {/* Availability changed banner */}
