@@ -5,11 +5,23 @@ import { createClient } from '@/lib/supabase/client'
 import DocumentList from '@/components/DocumentList'
 import Link from 'next/link'
 
+const REQ_STATUSES = [
+  { value: 'not_started',        label: 'Not Started',        cls: 'bg-gray-100 text-gray-600' },
+  { value: 'instructions_sent',  label: 'Instructions Sent',  cls: 'bg-blue-100 text-blue-700' },
+  { value: 'awaiting_candidate', label: 'Awaiting Candidate', cls: 'bg-amber-100 text-amber-700' },
+  { value: 'action_needed',      label: 'Action Needed',      cls: 'bg-red-100 text-red-700' },
+]
+
+function statusCls(value: string) {
+  return REQ_STATUSES.find(s => s.value === value)?.cls ?? REQ_STATUSES[0].cls
+}
+
 type ChecklistItem = {
   id: string
   completed: boolean
   requirement_id: string
   due_date: string | null
+  status: string | null
   assignee: { full_name: string | null } | null
   requirement: {
     title: string
@@ -55,6 +67,11 @@ export default function ChecklistSection({
     }).eq('id', item.id)
   }
 
+  async function updateStatus(item: ChecklistItem, status: string) {
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, status } : i))
+    await supabase.from('candidate_requirements').update({ status }).eq('id', item.id)
+  }
+
   const outstanding = items.filter(i => !i.completed)
   const completed = items.filter(i => i.completed)
   const visible = showCompleted ? items : outstanding
@@ -88,8 +105,9 @@ export default function ChecklistSection({
             ? new Date(item.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
             : null
 
+          const currentStatus = item.status ?? 'not_started'
           return (
-            <div key={item.id} className="grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: '1rem 1fr 8rem 5rem' }}>
+            <div key={item.id} className="grid items-center gap-3 px-4 py-1.5" style={{ gridTemplateColumns: '1rem 1fr 10rem 7rem 5rem' }}>
               <button
                 onClick={() => toggle(item)}
                 className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${item.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
@@ -106,6 +124,15 @@ export default function ChecklistSection({
                   <DocumentList docs={docs.filter(d => d.requirement_id === item.requirement_id)} />
                 )}
               </p>
+              <select
+                value={currentStatus}
+                onChange={e => updateStatus(item, e.target.value)}
+                className={`text-xs font-medium rounded-md px-2 py-1 border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusCls(currentStatus)}`}
+              >
+                {REQ_STATUSES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
               <span className="text-xs text-gray-400 truncate">{item.assignee?.full_name ?? ''}</span>
               <span className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
                 {overdue ? '⚠ ' : ''}{dueLabel ?? ''}
