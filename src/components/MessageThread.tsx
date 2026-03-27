@@ -75,8 +75,12 @@ export default function MessageThread({
     return () => clearInterval(interval)
   }, [candidateId])
 
+  const prevCountRef = useRef(initialMessages.length)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messages.length > prevCountRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+    prevCountRef.current = messages.length
   }, [messages])
 
   async function handleSend(e: React.FormEvent) {
