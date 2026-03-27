@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     refreshToken: token.refresh_token,
     to,
     subject,
-    body,
+    htmlBody: body,
     threadId,
     attachments,
   })

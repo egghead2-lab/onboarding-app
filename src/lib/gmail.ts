@@ -75,12 +75,27 @@ export async function fetchThreadMessages(
   })
 }
 
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .trim()
+}
+
 export async function sendEmail({
   accessToken,
   refreshToken,
   to,
   subject,
-  body,
+  htmlBody,
   threadId,
   attachments,
 }: {
@@ -88,13 +103,32 @@ export async function sendEmail({
   refreshToken: string | null
   to: string
   subject: string
-  body: string
+  htmlBody: string
   threadId?: string | null
   attachments?: Array<{ name: string; mimeType: string; data: Buffer }>
 }) {
   const client = getOAuthClient()
   client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
   const gmail = google.gmail({ version: 'v1', auth: client })
+
+  const plainText = htmlToPlainText(htmlBody)
+  const altBoundary = `alt_${Date.now()}`
+  const mixedBoundary = `mixed_${Date.now() + 1}`
+
+  // multipart/alternative wraps text + html
+  const altPart = [
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    '',
+    `--${altBoundary}`,
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    plainText,
+    `--${altBoundary}`,
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    htmlBody,
+    `--${altBoundary}--`,
+  ].join('\r\n')
 
   let encoded: string
 
@@ -103,27 +137,32 @@ export async function sendEmail({
       `To: ${to}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      '',
+      `--${altBoundary}`,
       'Content-Type: text/plain; charset=utf-8',
       '',
-      body,
+      plainText,
+      `--${altBoundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody,
+      `--${altBoundary}--`,
     ].join('\r\n')
     encoded = Buffer.from(message).toString('base64url')
   } else {
-    const boundary = `boundary_${Date.now()}`
     const parts: string[] = [
       `To: ${to}`,
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
       '',
-      `--${boundary}`,
-      'Content-Type: text/plain; charset=utf-8',
-      '',
-      body,
+      `--${mixedBoundary}`,
+      altPart,
     ]
     for (const att of attachments) {
       parts.push(
-        `--${boundary}`,
+        `--${mixedBoundary}`,
         `Content-Type: ${att.mimeType}; name="${att.name}"`,
         `Content-Disposition: attachment; filename="${att.name}"`,
         'Content-Transfer-Encoding: base64',
@@ -131,7 +170,7 @@ export async function sendEmail({
         att.data.toString('base64'),
       )
     }
-    parts.push(`--${boundary}--`)
+    parts.push(`--${mixedBoundary}--`)
     encoded = Buffer.from(parts.join('\r\n')).toString('base64url')
   }
 
