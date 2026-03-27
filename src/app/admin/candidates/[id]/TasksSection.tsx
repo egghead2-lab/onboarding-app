@@ -107,29 +107,27 @@ export default function TasksSection({
               : null
 
             return (
-              <div key={task.id} className="flex items-start gap-3 px-4 py-3">
+              <div key={task.id} className="flex items-center gap-3 px-4 py-2">
                 <button
                   onClick={() => toggle(task)}
-                  className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${task.completed ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${task.completed ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300 hover:border-blue-500'}`}
                 >
                   {task.completed && (
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </button>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</p>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    {dueLabel && (
-                      <span className={`text-xs ${overdue ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
-                        {overdue ? '⚠ ' : ''}Due {dueLabel}
-                      </span>
-                    )}
-                    {task.assignee?.full_name && (
-                      <span className="text-xs text-gray-400">{task.assignee.full_name}</span>
-                    )}
-                  </div>
+                <p className={`flex-1 text-sm min-w-0 truncate ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>{task.title}</p>
+                <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                  {task.assignee?.full_name && (
+                    <span className="text-xs text-gray-400 whitespace-nowrap">{task.assignee.full_name}</span>
+                  )}
+                  {dueLabel && (
+                    <span className={`text-xs whitespace-nowrap font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
+                      {overdue ? '⚠ ' : ''}{dueLabel}
+                    </span>
+                  )}
                 </div>
               </div>
             )
