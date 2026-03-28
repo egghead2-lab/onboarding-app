@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import RequirementsFilter from './RequirementsFilter'
 import RequirementRow from './RequirementRow'
 
 async function createRequirement(formData: FormData) {
@@ -13,6 +15,8 @@ async function createRequirement(formData: FormData) {
   const offsetDir = formData.get('due_offset_direction') as string
   const due_offset_days = offsetValue ? (offsetDir === 'before' ? -Number(offsetValue) : Number(offsetValue)) : null
   const requires_document = formData.get('requires_document') === 'on'
+  const templateVal = formData.get('template_id') as string
+  const template_id = templateVal && templateVal !== 'unspecified' ? templateVal : null
 
   const { data: last } = await supabase.from('requirements').select('sort_order').order('sort_order', { ascending: false }).limit(1).single()
 
@@ -22,16 +26,9 @@ async function createRequirement(formData: FormData) {
     type,
     due_offset_days,
     requires_document,
+    template_id,
     sort_order: (last?.sort_order ?? 0) + 1,
   })
-
-  const { data: req } = await supabase.from('requirements').select('id').eq('title', title).order('sort_order', { ascending: false }).limit(1).single()
-  const { data: candidates } = await supabase.from('candidates').select('id')
-  if (candidates?.length && req) {
-    await supabase.from('candidate_requirements').insert(
-      candidates.map((c: any) => ({ candidate_id: c.id, requirement_id: req.id }))
-    )
-  }
 
   redirect('/admin/requirements')
 }
@@ -43,6 +40,8 @@ async function updateRequirement(formData: FormData) {
   const offsetValue = formData.get('due_offset_value')
   const offsetDir = formData.get('due_offset_direction') as string
   const due_offset_days = offsetValue ? (offsetDir === 'before' ? -Number(offsetValue) : Number(offsetValue)) : null
+  const templateVal = formData.get('template_id') as string
+  const template_id = templateVal && templateVal !== 'unspecified' ? templateVal : null
 
   await supabase.from('requirements').update({
     title: formData.get('title') as string,
@@ -50,10 +49,9 @@ async function updateRequirement(formData: FormData) {
     type: formData.get('type') as string,
     due_offset_days,
     requires_document: formData.get('requires_document') === 'on',
+    template_id,
   }).eq('id', id)
 
-  // Recalculate due dates for all candidates who have this requirement
-  // and already have a first_class_date set
   if (due_offset_days != null) {
     const { data: candReqs } = await supabase
       .from('candidate_requirements')
@@ -65,17 +63,10 @@ async function updateRequirement(formData: FormData) {
       if (!firstClassDate) continue
       const d = new Date(firstClassDate)
       d.setDate(d.getDate() + due_offset_days)
-      await supabase
-        .from('candidate_requirements')
-        .update({ due_date: d.toISOString().split('T')[0] })
-        .eq('id', cr.id)
+      await supabase.from('candidate_requirements').update({ due_date: d.toISOString().split('T')[0] }).eq('id', cr.id)
     }
   } else {
-    // Offset cleared — remove due dates for this requirement
-    await supabase
-      .from('candidate_requirements')
-      .update({ due_date: null })
-      .eq('requirement_id', id)
+    await supabase.from('candidate_requirements').update({ due_date: null }).eq('requirement_id', id)
   }
 
   redirect('/admin/requirements')
@@ -87,7 +78,6 @@ async function deleteRequirement(formData: FormData) {
   await supabase.from('requirements').delete().eq('id', formData.get('id') as string)
   redirect('/admin/requirements')
 }
-
 
 async function moveRequirement(formData: FormData) {
   'use server'
@@ -114,15 +104,12 @@ async function moveRequirement(formData: FormData) {
 
 export default async function RequirementsPage() {
   const supabase = await createClient()
-  const { data: requirements } = await supabase
-    .from('requirements')
-    .select('*')
-    .order('sort_order')
+  const adminClient = createAdminClient()
 
-  const grouped = {
-    onboarding: requirements?.filter((r: any) => r.type === 'onboarding') ?? [],
-    training: requirements?.filter((r: any) => r.type === 'training') ?? [],
-  }
+  const [{ data: requirements }, { data: templates }] = await Promise.all([
+    supabase.from('requirements').select('*').order('sort_order'),
+    adminClient.from('requirement_templates').select('id, name, is_universal, area').order('is_universal', { ascending: false }).order('sort_order'),
+  ])
 
   return (
     <div className="p-8 max-w-2xl">
@@ -157,6 +144,18 @@ export default async function RequirementsPage() {
             </div>
           </div>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Template assignment</label>
+          <select name="template_id"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="unspecified">Unspecified</option>
+            {templates?.map((t: any) => (
+              <option key={t.id} value={t.id}>
+                {t.is_universal ? '★ Universal — ' : ''}{t.name}{t.area ? ` (${t.area})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" name="requires_document" className="rounded" />
           Requires document upload
@@ -166,29 +165,14 @@ export default async function RequirementsPage() {
         </button>
       </form>
 
-      {/* Lists grouped by type */}
-      {(['onboarding', 'training'] as const).map((type) => (
-        <div key={type} className="mb-6">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 capitalize">{type}</h2>
-          {!grouped[type].length ? (
-            <p className="text-sm text-gray-400">No {type} requirements yet.</p>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-              {grouped[type].map((req: any, i: number) => (
-                <RequirementRow
-                  key={req.id}
-                  req={req}
-                  isFirst={i === 0}
-                  isLast={i === grouped[type].length - 1}
-                  moveAction={moveRequirement}
-                  updateAction={updateRequirement}
-                  deleteAction={deleteRequirement}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
+      {/* Filterable requirements list */}
+      <RequirementsFilter
+        requirements={requirements ?? []}
+        templates={templates ?? []}
+        moveAction={moveRequirement}
+        updateAction={updateRequirement}
+        deleteAction={deleteRequirement}
+      />
     </div>
   )
 }

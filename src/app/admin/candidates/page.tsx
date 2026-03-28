@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getAreas } from '@/lib/sheets'
+import { getAreas, getSheetRows, type AreaRow } from '@/lib/sheets'
 import Link from 'next/link'
 import CandidateRow from './CandidateRow'
 import CandidateSearch from './CandidateSearch'
@@ -10,7 +10,7 @@ const TABLE_HEADERS = (
       <th className="text-left px-3 py-3 font-medium text-gray-600">Name</th>
       <th className="text-left px-3 py-3 font-medium text-gray-600">Area</th>
       <th className="text-left px-3 py-3 font-medium text-gray-600">Status</th>
-      <th className="text-left px-3 py-3 font-medium text-gray-600">Assigned To</th>
+      <th className="text-left px-3 py-3 font-medium text-gray-600">Onboarder / Trainer</th>
       <th className="text-left px-3 py-3 font-medium text-gray-600">First Class Date</th>
       <th className="px-3 py-3"></th>
     </tr>
@@ -48,10 +48,11 @@ export default async function CandidatesPage({
     query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`)
   }
 
-  const [{ data: candidates }, { data: teamMembers }, areas] = await Promise.all([
+  const [{ data: candidates }, { data: teamMembers }, areas, sheetRows] = await Promise.all([
     query,
-    supabase.from('profiles').select('id, full_name, email').in('role', ['admin', 'team']).order('full_name'),
+    supabase.from('profiles').select('id, full_name, email, staff_role').in('role', ['admin', 'team']).order('full_name'),
     getAreas(),
+    getSheetRows(),
   ])
 
   const pending = candidates?.filter((c: any) => !c.accepted_at) ?? []
@@ -87,7 +88,7 @@ export default async function CandidatesPage({
       if (!b.due_date) return -1
       return a.due_date.localeCompare(b.due_date)
     })
-    return { candidate: c, teamMembers: teamMembers ?? [], areas, unreadCount: unreadCount(c), approaching, overdueRequirements: overdueReqs(c), allRequirements: allReqs }
+    return { candidate: c, teamMembers: teamMembers ?? [], areas, sheetRows, unreadCount: unreadCount(c), approaching, overdueRequirements: overdueReqs(c), allRequirements: allReqs }
   }
 
   return (

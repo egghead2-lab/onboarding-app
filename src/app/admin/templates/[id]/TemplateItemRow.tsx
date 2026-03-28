@@ -1,12 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-
-type Template = { id: string; name: string; is_universal: boolean; area: string | null }
+import { useState } from 'react'
 
 type Props = {
-  req: any
-  templates: Template[]
+  item: any
   isFirst: boolean
   isLast: boolean
   moveAction: (formData: FormData) => Promise<void>
@@ -25,47 +22,25 @@ function formatOffset(days: number | null) {
   return days < 0 ? `${Math.abs(days)} days before` : `${days} days after`
 }
 
-export default function RequirementRow({ req, templates, isFirst, isLast, moveAction, updateAction, deleteAction }: Props) {
+export default function TemplateItemRow({ item, isFirst, isLast, moveAction, updateAction, deleteAction }: Props) {
   const [editing, setEditing] = useState(false)
-  const [templateId, setTemplateId] = useState<string>(req.template_id ?? 'unspecified')
-  const [pending, startTransition] = useTransition()
-  const storedOffset = req.due_offset_days
+  const storedOffset = item.due_offset_days
   const initDir = storedOffset != null && storedOffset < 0 ? 'before' : 'after'
   const initVal = storedOffset != null ? Math.abs(storedOffset) : ''
-
-  const assignedTemplate = templates.find(t => t.id === templateId)
-
-  function handleTemplateChange(value: string) {
-    setTemplateId(value)
-    startTransition(async () => {
-      const fd = new FormData()
-      fd.set('id', req.id)
-      fd.set('title', req.title)
-      fd.set('description', req.description ?? '')
-      fd.set('type', req.type ?? 'onboarding')
-      if (req.due_offset_days != null) {
-        fd.set('due_offset_value', String(Math.abs(req.due_offset_days)))
-        fd.set('due_offset_direction', req.due_offset_days < 0 ? 'before' : 'after')
-      }
-      if (req.requires_document) fd.set('requires_document', 'on')
-      fd.set('template_id', value)
-      await updateAction(fd)
-    })
-  }
 
   return (
     <div className="px-4 py-3">
       {editing ? (
         <form action={async (fd) => { await updateAction(fd); setEditing(false) }} className="space-y-2">
-          <input type="hidden" name="id" value={req.id} />
-          <input name="title" defaultValue={req.title} required
+          <input type="hidden" name="id" value={item.id} />
+          <input name="title" defaultValue={item.title} required
             className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          <input name="description" defaultValue={req.description ?? ''} placeholder="Description (optional)"
+          <input name="description" defaultValue={item.description ?? ''} placeholder="Description (optional)"
             className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs text-gray-500 mb-0.5">Type</label>
-              <select name="type" defaultValue={req.type ?? 'onboarding'}
+              <select name="type" defaultValue={item.type ?? 'onboarding'}
                 className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="onboarding">Onboarding</option>
                 <option value="training">Training</option>
@@ -84,11 +59,6 @@ export default function RequirementRow({ req, templates, isFirst, isLast, moveAc
               </div>
             </div>
           </div>
-          <input type="hidden" name="template_id" value={templateId} />
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" name="requires_document" defaultChecked={req.requires_document} className="rounded" />
-            Requires document upload
-          </label>
           <div className="flex gap-2">
             <button type="submit" className="bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-blue-700">Save</button>
             <button type="button" onClick={() => setEditing(false)} className="text-gray-500 px-3 py-1.5 rounded-md text-xs hover:bg-gray-100">Cancel</button>
@@ -98,56 +68,34 @@ export default function RequirementRow({ req, templates, isFirst, isLast, moveAc
         <div className="flex items-center gap-3">
           <div className="flex flex-col gap-0.5">
             <form action={moveAction}>
-              <input type="hidden" name="id" value={req.id} />
+              <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="direction" value="up" />
               <button type="submit" disabled={isFirst} className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-xs">▲</button>
             </form>
             <form action={moveAction}>
-              <input type="hidden" name="id" value={req.id} />
+              <input type="hidden" name="id" value={item.id} />
               <input type="hidden" name="direction" value="down" />
               <button type="submit" disabled={isLast} className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none text-xs">▼</button>
             </form>
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900">{req.title}</p>
-            {req.description && <p className="text-xs text-gray-500 mt-0.5">{req.description}</p>}
-            <div className="flex gap-2 mt-1 flex-wrap">
-              <span className={`text-xs px-2 py-0.5 rounded font-medium ${typeColors[req.type ?? 'onboarding']}`}>
-                {req.type ?? 'onboarding'}
+            <p className="text-sm font-medium text-gray-900">{item.title}</p>
+            {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
+            <div className="flex gap-2 mt-1">
+              <span className={`text-xs px-2 py-0.5 rounded font-medium ${typeColors[item.type ?? 'onboarding']}`}>
+                {item.type ?? 'onboarding'}
               </span>
-              {formatOffset(req.due_offset_days) && (
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{formatOffset(req.due_offset_days)}</span>
+              {formatOffset(item.due_offset_days) && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{formatOffset(item.due_offset_days)}</span>
               )}
-              {req.requires_document && (
-                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">doc required</span>
-              )}
-              <select
-                value={templateId}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-                disabled={pending}
-                className={`text-xs border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                  pending ? 'opacity-50' : ''
-                } ${
-                  assignedTemplate
-                    ? 'border-amber-200 bg-amber-50 text-amber-700'
-                    : 'border-dashed border-gray-200 text-gray-400 bg-white'
-                }`}
-              >
-                <option value="unspecified">Unspecified</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.is_universal ? '★ ' : ''}{t.name}{t.area ? ` (${t.area})` : ''}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
             <button type="button" onClick={() => setEditing(true)} className="text-xs text-gray-500 hover:text-blue-600">Edit</button>
             <form action={deleteAction}>
-              <input type="hidden" name="id" value={req.id} />
+              <input type="hidden" name="id" value={item.id} />
               <button type="submit" className="text-xs text-gray-400 hover:text-red-500">Delete</button>
             </form>
           </div>

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import EmailThread from '@/components/EmailThread'
@@ -7,6 +8,7 @@ import MessageThread from '@/components/MessageThread'
 import ChecklistSection from './ChecklistSection'
 import TasksSection from './TasksSection'
 import CollapsibleSection from './CollapsibleSection'
+import ApplyTemplateButton from './ApplyTemplateButton'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -28,6 +30,92 @@ async function updateStatus(formData: FormData) {
     .update({ status: formData.get('status') as string })
     .eq('id', formData.get('id') as string)
   redirect('.')
+}
+
+async function applyTemplate(candidateId: string, templateId: string): Promise<{ added: number; skipped: number; alreadyApplied: boolean; templateName: string }> {
+  'use server'
+  const supabase = createAdminClient()
+
+  // Check if already applied
+  const { data: templateInfo } = await supabase.from('requirement_templates').select('name').eq('id', templateId).single()
+  const templateName = templateInfo?.name ?? 'Unknown'
+
+  const { data: alreadyApplied } = await supabase
+    .from('candidate_applied_templates')
+    .select('id')
+    .eq('candidate_id', candidateId)
+    .eq('template_id', templateId)
+    .single()
+
+  if (alreadyApplied) return { added: 0, skipped: 0, alreadyApplied: true, templateName }
+
+  // Merge template_items (manually curated) + requirements tagged to this template
+  const [{ data: templateItems }, { data: taggedReqs }] = await Promise.all([
+    supabase.from('template_items').select('*').eq('template_id', templateId),
+    supabase.from('requirements').select('*').eq('template_id', templateId),
+  ])
+
+  // Deduplicate by title+type — tagged requirements take precedence (they have real IDs)
+  const seen = new Set<string>()
+  const allItems: { title: string; description: string | null; type: string; due_offset_days: number | null; existing_req_id?: string }[] = []
+  for (const r of taggedReqs ?? []) {
+    const key = `${r.title.toLowerCase()}|${r.type}`
+    if (!seen.has(key)) { seen.add(key); allItems.push({ ...r, existing_req_id: r.id }) }
+  }
+  for (const i of templateItems ?? []) {
+    const key = `${i.title.toLowerCase()}|${i.type}`
+    if (!seen.has(key)) { seen.add(key); allItems.push(i) }
+  }
+
+  if (!allItems.length) return { added: 0, skipped: 0, alreadyApplied: false, templateName }
+
+  // Get requirements already assigned to this candidate
+  const { data: existing } = await supabase
+    .from('candidate_requirements')
+    .select('requirement:requirement_id(title, type)')
+    .eq('candidate_id', candidateId)
+  const existingKeys = new Set(
+    (existing ?? []).map((cr: any) => `${cr.requirement?.title?.toLowerCase()}|${cr.requirement?.type}`)
+  )
+
+  const { data: lastReq } = await supabase
+    .from('requirements')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single()
+  let nextOrder = (lastReq?.sort_order ?? 0) + 1
+
+  let added = 0
+  let skipped = 0
+
+  for (const item of allItems) {
+    const key = `${item.title.toLowerCase()}|${item.type}`
+    if (existingKeys.has(key)) { skipped++; continue }
+
+    // Use existing requirement ID if already tagged, otherwise find or create
+    let reqId = item.existing_req_id
+    if (!reqId) {
+      const { data: existingReq } = await supabase.from('requirements').select('id').eq('title', item.title).eq('type', item.type).single()
+      reqId = existingReq?.id
+      if (!reqId) {
+        const { data: newReq } = await supabase.from('requirements')
+          .insert({ title: item.title, description: item.description, type: item.type, due_offset_days: item.due_offset_days, sort_order: nextOrder++ })
+          .select('id').single()
+        reqId = newReq?.id
+      }
+    }
+
+    if (reqId) {
+      await supabase.from('candidate_requirements').insert({ candidate_id: candidateId, requirement_id: reqId })
+      added++
+    }
+  }
+
+  // Record that this template was applied
+  await supabase.from('candidate_applied_templates').insert({ candidate_id: candidateId, template_id: templateId })
+
+  return { added, skipped, alreadyApplied: false, templateName }
 }
 
 
@@ -55,7 +143,8 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }, { data: teamMembers }] = await Promise.all([
+  const adminClient = createAdminClient()
+  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }, { data: teamMembers }, { data: templates }, { data: appliedTemplates }] = await Promise.all([
     supabase.from('candidate_requirements')
       .select('*, requirement:requirement_id(*), assignee:assigned_to(full_name)')
       .eq('candidate_id', id)
@@ -72,6 +161,8 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
       ? supabase.from('profiles').select('full_name').eq('id', candidate.onboarder_id).single()
       : Promise.resolve({ data: null }),
     supabase.from('profiles').select('id, full_name, email, staff_role').in('role', ['admin', 'team']).order('full_name'),
+    adminClient.from('requirement_templates').select('*, items:template_items(*), tagged:requirements(id,title,description,type,due_offset_days,sort_order)').order('is_universal', { ascending: false }).order('sort_order'),
+    adminClient.from('candidate_applied_templates').select('template_id, applied_at, template:template_id(name)').eq('candidate_id', id).order('applied_at'),
   ])
 
   const docsWithUrls = await Promise.all(
@@ -147,6 +238,26 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
       {/* Requirements */}
       <div className="mb-8">
+        <ApplyTemplateButton
+          candidateId={id}
+          candidateArea={candidate.area ?? null}
+          appliedTemplateIds={new Set((appliedTemplates ?? []).map((a: any) => a.template_id))}
+          appliedHistory={(appliedTemplates ?? []).map((a: any) => ({ id: a.template_id, name: (a.template as any)?.name ?? 'Unknown', appliedAt: a.applied_at }))}
+          templates={(templates ?? []).map((t: any) => {
+            const seen = new Set<string>()
+            const merged: any[] = []
+            for (const r of (t.tagged ?? [])) {
+              const key = `${r.title.toLowerCase()}|${r.type}`
+              if (!seen.has(key)) { seen.add(key); merged.push(r) }
+            }
+            for (const i of (t.items ?? [])) {
+              const key = `${i.title.toLowerCase()}|${i.type}`
+              if (!seen.has(key)) { seen.add(key); merged.push(i) }
+            }
+            return { id: t.id, name: t.name, is_universal: t.is_universal, area: t.area ?? null, items: merged.sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) }
+          })}
+          applyAction={applyTemplate}
+        />
         <ChecklistSection
           initialItems={checklist ?? []}
           docs={docsWithUrls}

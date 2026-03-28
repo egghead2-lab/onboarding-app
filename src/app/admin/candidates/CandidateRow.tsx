@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -36,18 +36,14 @@ type Req = {
 // keep for compat
 type OverdueReq = Req & { due_date: string }
 
-type TeamMember = { id: string; full_name: string | null; email: string }
-type SheetData = {
-  rows: { area: string; trainer: string; fieldManager: string; scheduler: string }[]
-  trainers: string[]
-  fieldManagers: string[]
-  schedulers: string[]
-}
+type TeamMember = { id: string; full_name: string | null; email: string; staff_role: string | null }
+type SheetRow = { area: string; trainer: string; fieldManager: string; scheduler: string }
 
 export default function CandidateRow({
   candidate,
   teamMembers,
   areas,
+  sheetRows,
   unreadCount,
   approaching,
   overdueRequirements = [],
@@ -56,6 +52,7 @@ export default function CandidateRow({
   candidate: any
   teamMembers: TeamMember[]
   areas: string[]
+  sheetRows: SheetRow[]
   unreadCount: number
   approaching?: boolean
   overdueRequirements?: OverdueReq[]
@@ -63,15 +60,11 @@ export default function CandidateRow({
 }) {
   const router = useRouter()
   const [status, setStatus] = useState(candidate.status)
-  const [assignedTo, setAssignedTo] = useState(candidate.assigned_to ?? '')
+  const [onboarderId, setOnboarderId] = useState(candidate.onboarder_id ?? '')
+  const [trainerId, setTrainerId] = useState(candidate.trainer_id ?? '')
   const [area, setArea] = useState(candidate.area ?? '')
   const [firstClassDate, setFirstClassDate] = useState(candidate.first_class_date ?? '')
-  const [sheetData, setSheetData] = useState<SheetData | null>(null)
   const [showReqs, setShowReqs] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/sheets').then((r) => r.json()).then(setSheetData)
-  }, [])
 
   const href = `/admin/candidates/${candidate.id}`
   const availChanged = candidate.candidate_details?.[0]?.availability_changed
@@ -86,8 +79,8 @@ export default function CandidateRow({
     setArea(val)
     const updates: Record<string, string | null> = { area: val || null }
 
-    if (val && sheetData) {
-      const match = sheetData.rows.find((r) => r.area === val)
+    if (val && sheetRows) {
+      const match = sheetRows.find((r) => r.area === val)
       if (match) {
         updates.trainer = match.trainer
         updates.field_manager = match.fieldManager
@@ -162,18 +155,32 @@ export default function CandidateRow({
         </select>
       </td>
 
-      {/* Assigned To */}
+      {/* Onboarder / Trainer */}
       <td className={cell}>
-        <select
-          value={assignedTo}
-          onChange={(e) => { setAssignedTo(e.target.value); handleChange('assigned_to', e.target.value) }}
-          className={select}
-        >
-          <option value="">—</option>
-          {teamMembers.map((m) => (
-            <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-1">
+          <select
+            value={onboarderId}
+            onChange={(e) => { setOnboarderId(e.target.value); handleChange('onboarder_id', e.target.value) }}
+            className={select}
+            title="Onboarder"
+          >
+            <option value="">Onboarder —</option>
+            {teamMembers.filter(m => !m.staff_role || m.staff_role === 'onboarder' || m.staff_role === 'admin').map((m) => (
+              <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+            ))}
+          </select>
+          <select
+            value={trainerId}
+            onChange={(e) => { setTrainerId(e.target.value); handleChange('trainer_id', e.target.value) }}
+            className={select}
+            title="Trainer"
+          >
+            <option value="">Trainer —</option>
+            {teamMembers.filter(m => !m.staff_role || m.staff_role === 'trainer' || m.staff_role === 'admin').map((m) => (
+              <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>
+            ))}
+          </select>
+        </div>
       </td>
 
       {/* First Class Date */}

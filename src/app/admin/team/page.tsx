@@ -29,7 +29,7 @@ export default async function TeamPage() {
     u.invited_at &&
     !u.email_confirmed_at &&
     !u.confirmed_at &&
-    (u.raw_user_meta_data?.role === 'team' || u.raw_user_meta_data?.role === 'admin')
+    (u.user_metadata?.role === 'team' || u.user_metadata?.role === 'admin')
   )
 
   const STAFF_ROLES = [
@@ -57,7 +57,7 @@ export default async function TeamPage() {
             {pendingInvites.map(u => (
               <div key={u.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{u.raw_user_meta_data?.full_name ?? '—'}</p>
+                  <p className="text-sm font-medium text-gray-900">{u.user_metadata?.full_name ?? '—'}</p>
                   <p className="text-xs text-gray-400">{u.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
