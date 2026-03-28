@@ -46,6 +46,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin/templates" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100">
             Templates
           </Link>
+          <Link href="/admin/email-templates" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100">
+            Email Templates
+          </Link>
         </nav>
         <div className="p-3 border-t border-gray-200">
           <form action="/auth/logout" method="POST">

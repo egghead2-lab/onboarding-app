@@ -144,7 +144,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
   const { data: { user } } = await supabase.auth.getUser()
 
   const adminClient = createAdminClient()
-  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }, { data: teamMembers }, { data: templates }, { data: appliedTemplates }] = await Promise.all([
+  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }, { data: teamMembers }, { data: templates }, { data: appliedTemplates }, { data: emailTemplates }] = await Promise.all([
     supabase.from('candidate_requirements')
       .select('*, requirement:requirement_id(*), assignee:assigned_to(full_name)')
       .eq('candidate_id', id)
@@ -163,6 +163,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
     supabase.from('profiles').select('id, full_name, email, staff_role').in('role', ['admin', 'team']).order('full_name'),
     adminClient.from('requirement_templates').select('*, items:template_items(*), tagged:requirements(id,title,description,type,due_offset_days,sort_order)').order('is_universal', { ascending: false }).order('sort_order'),
     adminClient.from('candidate_applied_templates').select('template_id, applied_at, template:template_id(name)').eq('candidate_id', id).order('applied_at'),
+    adminClient.from('email_templates').select('id, name, subject, body, requirement_id').order('sort_order'),
   ])
 
   const docsWithUrls = await Promise.all(
@@ -262,8 +263,12 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
           initialItems={checklist ?? []}
           docs={docsWithUrls}
           candidateId={id}
+          candidateName={candidate.full_name}
+          candidateEmail={candidate.email}
+          gmailConnected={!!gmailToken}
           currentUserId={user!.id}
           teamMembers={teamMembers ?? []}
+          emailTemplates={emailTemplates ?? []}
         />
       </div>
 
