@@ -12,6 +12,11 @@ const statusColors: Record<string, string> = {
   rejected: 'bg-red-100 text-red-800',
 }
 
+const TYPE_COLORS: Record<string, string> = {
+  onboarding: 'bg-purple-100 text-purple-700',
+  training: 'bg-green-100 text-green-700',
+}
+
 const REQ_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   not_started:        { label: 'Not Started',        cls: 'bg-gray-100 text-gray-600' },
   instructions_sent:  { label: 'Instructions Sent',  cls: 'bg-blue-100 text-blue-700' },
@@ -19,13 +24,17 @@ const REQ_STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   action_needed:      { label: 'Action Needed',      cls: 'bg-red-100 text-red-700' },
 }
 
-type OverdueReq = {
+type Req = {
   id: string
-  due_date: string
+  due_date: string | null
   status: string | null
+  completed: boolean
   requirement: { title: string; type: string } | null
   assignee: { full_name: string | null } | null
 }
+
+// keep for compat
+type OverdueReq = Req & { due_date: string }
 
 type TeamMember = { id: string; full_name: string | null; email: string }
 type SheetData = {
@@ -42,6 +51,7 @@ export default function CandidateRow({
   unreadCount,
   approaching,
   overdueRequirements = [],
+  allRequirements = [],
 }: {
   candidate: any
   teamMembers: TeamMember[]
@@ -49,6 +59,7 @@ export default function CandidateRow({
   unreadCount: number
   approaching?: boolean
   overdueRequirements?: OverdueReq[]
+  allRequirements?: Req[]
 }) {
   const router = useRouter()
   const [status, setStatus] = useState(candidate.status)
@@ -56,6 +67,7 @@ export default function CandidateRow({
   const [area, setArea] = useState(candidate.area ?? '')
   const [firstClassDate, setFirstClassDate] = useState(candidate.first_class_date ?? '')
   const [sheetData, setSheetData] = useState<SheetData | null>(null)
+  const [showReqs, setShowReqs] = useState(false)
 
   useEffect(() => {
     fetch('/api/sheets').then((r) => r.json()).then(setSheetData)
@@ -105,7 +117,23 @@ export default function CandidateRow({
             <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">avail. changed</span>
           )}
         </Link>
-        <p className="text-xs text-gray-400 mt-0.5">{candidate.email}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className="text-xs text-gray-400">{candidate.email}</p>
+          {allRequirements.length > 0 && (
+            <button
+              onClick={() => setShowReqs(s => !s)}
+              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-0.5"
+            >
+              <svg className={`w-3 h-3 transition-transform ${showReqs ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              {overdueRequirements.length > 0
+                ? <span className="text-red-500">{overdueRequirements.length} overdue</span>
+                : <span>{allRequirements.filter(r => !r.completed).length} outstanding</span>
+              }
+            </button>
+          )}
+        </div>
       </td>
 
       {/* Area */}
@@ -191,26 +219,34 @@ export default function CandidateRow({
       </td>
     </tr>
 
-    {overdueRequirements.map(req => {
+    {showReqs && allRequirements.map(req => {
       const reqStatus = req.status ?? 'not_started'
       const statusInfo = REQ_STATUS_LABELS[reqStatus] ?? REQ_STATUS_LABELS.not_started
-      const dueLabel = new Date(req.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      const today = new Date().toISOString().split('T')[0]
+      const overdue = !req.completed && req.due_date && req.due_date < today
+      const dueLabel = req.due_date
+        ? new Date(req.due_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : null
       return (
-        <tr key={req.id} className="bg-red-50 border-b border-red-100">
-          {/* Name col — indented requirement title */}
+        <tr key={req.id} className={`border-b ${overdue ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+          {/* Name col */}
           <td className="px-3 py-1.5 pl-8">
             <Link href={href} className="flex items-center gap-2">
-              <span className="text-xs text-red-400">⚠</span>
-              <span className="text-xs text-gray-700 font-medium truncate max-w-xs">{req.requirement?.title}</span>
+              {overdue && <span className="text-xs text-red-400">⚠</span>}
+              <span className={`text-xs font-medium truncate max-w-xs ${req.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                {req.requirement?.title}
+              </span>
             </Link>
           </td>
-          {/* Area col — requirement type badge */}
+          {/* Area col — type badge */}
           <td className="px-3 py-1.5">
             {req.requirement?.type && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 capitalize">{req.requirement.type}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium capitalize ${TYPE_COLORS[req.requirement.type] ?? 'bg-gray-100 text-gray-500'}`}>
+                {req.requirement.type}
+              </span>
             )}
           </td>
-          {/* Status col — req status */}
+          {/* Status col */}
           <td className="px-3 py-1.5">
             <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${statusInfo.cls}`}>{statusInfo.label}</span>
           </td>
@@ -220,7 +256,11 @@ export default function CandidateRow({
           </td>
           {/* Due date col */}
           <td className="px-3 py-1.5">
-            <span className="text-xs font-medium text-red-600">Due {dueLabel}</span>
+            {dueLabel && (
+              <span className={`text-xs font-medium ${overdue ? 'text-red-600' : 'text-gray-400'}`}>
+                {overdue ? 'Due ' : ''}{dueLabel}
+              </span>
+            )}
           </td>
           <td />
         </tr>

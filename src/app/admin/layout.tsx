@@ -40,6 +40,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin/tasks" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100">
             Tasks
           </Link>
+          <Link href="/admin/team" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100">
+            Team
+          </Link>
         </nav>
         <div className="p-3 border-t border-gray-200">
           <form action="/auth/logout" method="POST">

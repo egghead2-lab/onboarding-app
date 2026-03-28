@@ -2,11 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import DashboardFilter from './DashboardFilter'
+import { OverdueReqsTable, OverdueTasksTable } from './OverdueTables'
 
-const typeColors: Record<string, string> = {
-  onboarding: 'bg-purple-100 text-purple-700',
-  training: 'bg-green-100 text-green-700',
-}
 
 export default async function AdminPage({
   searchParams,
@@ -47,7 +44,7 @@ export default async function AdminPage({
     supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('completed', false),
     supabase
       .from('candidate_requirements')
-      .select('id, due_date, candidate:candidate_id(id, full_name, onboarder_id, trainer_id), requirement:requirement_id(title, type, sort_order)')
+      .select('id, due_date, status, candidate:candidate_id(id, full_name, onboarder_id, trainer_id), requirement:requirement_id(title, type, sort_order)')
       .eq('completed', false)
       .not('due_date', 'is', null)
       .lt('due_date', today)
@@ -104,42 +101,13 @@ export default async function AdminPage({
         <div className="space-y-6 mb-8">
 
           {/* Overdue requirements */}
-          {(overdueOnboarding.length > 0 || overdueTraining.length > 0) && (
+          {filteredReqs.length > 0 && (
             <div>
               <h2 className="text-base font-semibold text-gray-900 mb-3">
                 Overdue Requirements
                 <span className="ml-2 text-sm font-normal text-red-500">({filteredReqs.length})</span>
               </h2>
-              <div className="space-y-4">
-                {[{ label: 'Onboarding', items: overdueOnboarding, type: 'onboarding' }, { label: 'Training', items: overdueTraining, type: 'training' }].map(({ label, items, type }) =>
-                  items.length > 0 ? (
-                    <div key={type}>
-                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{label}</h3>
-                      <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
-                        {items.map((r: any) => {
-                          const daysOverdue = Math.floor((new Date().getTime() - new Date(r.due_date).getTime()) / 86400000)
-                          return (
-                            <Link
-                              key={r.id}
-                              href={`/admin/candidates/${r.candidate?.id}`}
-                              className="flex items-center justify-between px-4 py-3 hover:bg-blue-50 transition-colors"
-                            >
-                              <div>
-                                <p className="text-sm font-medium text-gray-900">{r.candidate?.full_name}</p>
-                                <p className="text-xs text-gray-500 mt-0.5">{r.requirement?.title}</p>
-                              </div>
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                <span className={`text-xs px-2 py-0.5 rounded font-medium ${typeColors[type]}`}>{label}</span>
-                                <span className="text-xs text-red-600 font-medium">{daysOverdue}d overdue</span>
-                              </div>
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  ) : null
-                )}
-              </div>
+              <OverdueReqsTable reqs={filteredReqs} />
             </div>
           )}
 
@@ -150,24 +118,7 @@ export default async function AdminPage({
                 Overdue Tasks
                 <span className="ml-2 text-sm font-normal text-red-500">({filteredTasks.length})</span>
               </h2>
-              <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden">
-                {filteredTasks.map((t: any) => {
-                  const daysOverdue = Math.floor((new Date().getTime() - new Date(t.due_date).getTime()) / 86400000)
-                  return (
-                    <Link
-                      key={t.id}
-                      href={`/admin/candidates/${t.candidate?.id}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-blue-50 transition-colors"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{t.candidate?.full_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{t.title}</p>
-                      </div>
-                      <span className="text-xs text-red-600 font-medium flex-shrink-0">{daysOverdue}d overdue</span>
-                    </Link>
-                  )
-                })}
-              </div>
+              <OverdueTasksTable tasks={filteredTasks} />
             </div>
           )}
         </div>

@@ -9,12 +9,28 @@ export default async function PortalPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Find the candidate record linked to this user
-  const { data: candidate } = await supabase
+  // Use admin client to bypass RLS — session propagation after invite OTP can be unreliable
+  const adminClient = (await import('@/lib/supabase/admin')).createAdminClient()
+
+  let { data: candidate } = await adminClient
     .from('candidates')
     .select('*')
     .eq('profile_id', user.id)
     .single()
+
+  // Fallback: match by email and backfill profile_id
+  if (!candidate && user.email) {
+    const { data: byEmail } = await adminClient
+      .from('candidates')
+      .select('*')
+      .eq('email', user.email)
+      .single()
+
+    if (byEmail) {
+      await adminClient.from('candidates').update({ profile_id: user.id }).eq('id', byEmail.id)
+      candidate = { ...byEmail, profile_id: user.id }
+    }
+  }
 
   if (!candidate) {
     return (

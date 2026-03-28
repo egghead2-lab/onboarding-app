@@ -14,7 +14,7 @@ export default async function AdminCandidateProfilePage({ params }: { params: Pr
 
   const { data: details } = await supabase.from('candidate_details').select('*').eq('candidate_id', id).single()
   const areas = await getAreas()
-  const { data: teamMembers } = await supabase.from('profiles').select('id, full_name, email').in('role', ['admin', 'team']).order('full_name')
+  const { data: teamMembers } = await supabase.from('profiles').select('id, full_name, email, staff_role').in('role', ['admin', 'team']).order('full_name')
 
   return (
     <div className="p-8 max-w-3xl">

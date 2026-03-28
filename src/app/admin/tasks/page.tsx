@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import DeleteTaskButton from './DeleteTaskButton'
 
 export default async function TasksPage() {
   const supabase = await createClient()
@@ -31,6 +32,7 @@ export default async function TasksPage() {
                   {new Date(task.due_date).toLocaleDateString()}
                 </span>
               )}
+              <DeleteTaskButton taskId={task.id} />
             </div>
           ))}
         </div>

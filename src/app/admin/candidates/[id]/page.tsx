@@ -6,6 +6,7 @@ import AcknowledgeButton from './profile/AcknowledgeButton'
 import MessageThread from '@/components/MessageThread'
 import ChecklistSection from './ChecklistSection'
 import TasksSection from './TasksSection'
+import CollapsibleSection from './CollapsibleSection'
 
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -54,7 +55,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }] = await Promise.all([
+  const [{ data: checklist }, { data: tasks }, { data: gmailToken }, { data: documents }, { data: details }, { data: messages }, { data: onboarderProfile }, { data: teamMembers }] = await Promise.all([
     supabase.from('candidate_requirements')
       .select('*, requirement:requirement_id(*), assignee:assigned_to(full_name)')
       .eq('candidate_id', id)
@@ -70,6 +71,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
     candidate.onboarder_id
       ? supabase.from('profiles').select('full_name').eq('id', candidate.onboarder_id).single()
       : Promise.resolve({ data: null }),
+    supabase.from('profiles').select('id, full_name, email, staff_role').in('role', ['admin', 'team']).order('full_name'),
   ])
 
   const docsWithUrls = await Promise.all(
@@ -143,45 +145,44 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      {/* Requirements + Tasks side by side */}
-      <div className="flex gap-6 mb-8 items-start">
-        <section className="flex-1 min-w-0">
-          <ChecklistSection
-            initialItems={checklist ?? []}
-            docs={docsWithUrls}
-            candidateId={id}
-            currentUserId={user!.id}
-          />
-        </section>
-        <section className="w-80 flex-shrink-0">
-          <TasksSection
-            initialTasks={tasks ?? []}
-            candidateId={id}
-            currentUserId={user!.id}
-          />
-        </section>
+      {/* Requirements */}
+      <div className="mb-8">
+        <ChecklistSection
+          initialItems={checklist ?? []}
+          docs={docsWithUrls}
+          candidateId={id}
+          currentUserId={user!.id}
+          teamMembers={teamMembers ?? []}
+        />
       </div>
 
+      {/* Tasks */}
+      <CollapsibleSection title="Tasks" defaultOpen={true}>
+        <TasksSection
+          initialTasks={tasks ?? []}
+          candidateId={id}
+          currentUserId={user!.id}
+        />
+      </CollapsibleSection>
+
       {/* Messages */}
-      <section className="mb-8">
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Messages</h2>
+      <CollapsibleSection title="Messages" defaultOpen={true}>
         <MessageThread
           candidateId={id}
           currentUserId={user!.id}
           initialMessages={messages ?? []}
         />
-      </section>
+      </CollapsibleSection>
 
-      {/* Email — full width */}
-      <section>
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Email</h2>
+      {/* Email */}
+      <CollapsibleSection title="Email" defaultOpen={false}>
         <EmailThread
           candidateId={candidate.id}
           candidateEmail={candidate.email}
           candidateName={candidate.full_name}
           gmailConnected={!!gmailToken}
         />
-      </section>
+      </CollapsibleSection>
     </div>
   )
 }

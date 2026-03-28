@@ -1,26 +1,42 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const token_hash = searchParams.get('token_hash')
+    const type = searchParams.get('type') ?? 'invite'
+    const supabase = createClient()
+
+    if (token_hash) {
+      // Verify invite/recovery token client-side so session lives in the browser
+      supabase.auth.verifyOtp({ token_hash, type: type as any }).then(({ error }) => {
+        if (error) setError(error.message)
+        else setReady(true)
+      })
+    } else {
+      // Already has a session (e.g. password reset from logged-in state)
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) setReady(true)
+        else setError('Invalid or expired link. Please request a new one.')
+      })
+    }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (password !== confirm) {
-      setError('Passwords do not match.')
-      return
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
-      return
-    }
+    if (password !== confirm) { setError('Passwords do not match.'); return }
+    if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
 
     setLoading(true)
     setError(null)
@@ -33,14 +49,20 @@ export default function ResetPasswordPage() {
       return
     }
 
-    router.push('/portal')
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = user
+      ? await supabase.from('profiles').select('role').eq('id', user.id).single()
+      : { data: null }
+
+    router.push(profile?.role === 'candidate' ? '/portal' : '/admin')
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+<div className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Set New Password</h1>
         <p className="text-gray-500 text-sm mb-6">Choose a new password for your account.</p>
+        {!ready && !error && <p className="text-sm text-gray-400 mb-4">Verifying link…</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
@@ -65,7 +87,7 @@ export default function ResetPasswordPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !ready}
             className="w-full bg-blue-600 text-white py-2 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
             {loading ? 'Saving...' : 'Set Password'}

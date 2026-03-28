@@ -80,7 +80,14 @@ export default async function CandidatesPage({
   function rowProps(c: any) {
     const days = c.first_class_date ? daysUntil(c.first_class_date) : null
     const approaching = days !== null && days >= 0 && days <= 7
-    return { candidate: c, teamMembers: teamMembers ?? [], areas, unreadCount: unreadCount(c), approaching, overdueRequirements: overdueReqs(c) }
+    const allReqs = (c.candidate_requirements ?? []).sort((a: any, b: any) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return a.due_date.localeCompare(b.due_date)
+    })
+    return { candidate: c, teamMembers: teamMembers ?? [], areas, unreadCount: unreadCount(c), approaching, overdueRequirements: overdueReqs(c), allRequirements: allReqs }
   }
 
   return (

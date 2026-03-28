@@ -11,7 +11,7 @@ type SheetData = {
   schedulers: string[]
 }
 
-type TeamMember = { id: string; full_name: string | null; email: string }
+type TeamMember = { id: string; full_name: string | null; email: string; staff_role: string | null }
 
 export default function AdminProfileForm({
   candidate,
@@ -54,7 +54,8 @@ export default function AdminProfileForm({
   }, [])
 
   function matchTrainerToProfile(trainerName: string) {
-    const match = teamMembers.find(m => m.full_name === trainerName)
+    const match = teamMembers.find(m => m.staff_role === 'trainer' && m.full_name === trainerName)
+      ?? teamMembers.find(m => m.full_name === trainerName)
     setTrainerId(match?.id ?? '')
   }
 
@@ -323,7 +324,7 @@ export default function AdminProfileForm({
           <select value={onboarderId} onChange={(e) => setOnboarderId(e.target.value)}
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Select...</option>
-            {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
+            {teamMembers.filter(m => m.staff_role === 'onboarder').map((m) => <option key={m.id} value={m.id}>{m.full_name ?? m.email}</option>)}
           </select>
         </div>
 
